@@ -14,18 +14,23 @@ import re
 import requests
 from requests.auth import HTTPDigestAuth
 
-TOP = 'nova/api-ref/source'
+TOP = '../nova/nova/conf'
 
 PROJECT_SITE = "https://review.openstack.org/changes/"
 DIFF_QUERY = "%s/revisions/current/patch"
-QUERY = "q=project:openstack/nova+file:^api-ref/source/.*.inc+NOT+age:7d"
+QUERY = "q=project:openstack/nova+file:^nova/conf/.*.py+NOT+age:7d"
 ATTRS = ("&o=CURRENT_REVISION&o=ALL_COMMITS&o=ALL_FILES&o=LABELS"
          "&o=DETAILED_LABELS&o=DETAILED_ACCOUNTS")
 URL = "%s?%s%s" % (PROJECT_SITE, QUERY, ATTRS)
 DIFF_URL = PROJECT_SITE + DIFF_QUERY
 
-PHASES = ['needs:method_verification', 'needs:parameter_verification',
-          'needs:example_verification', 'needs:body_verification']
+PHASES = [
+    'needs:fix_opt_description',
+    'needs:check_deprecation_status',
+    'needs:check_opt_group_and_type',
+    'needs:fix_opt_description_indentation',
+    'needs:fix_opt_registration_consistency',
+    ]
 
 counts = collections.OrderedDict()
 for phase in PHASES:
@@ -66,7 +71,7 @@ def _http_process(change):
     files = []
     fname = None
     for line in diff.split('\n'):
-        m = re.match('--- a/api-ref/source/(.*.inc)$', line)
+        m = re.match('--- a/nova/conf/(.*.py)$', line)
         if m:
             fname = m.group(1)
         m = re.match('-.. needs:(.*)', line)
@@ -81,6 +86,7 @@ def _http_process(change):
 def gather_reviews():
     data = fetch_data(URL)
     changes = []
+
     for change in data:
         if change['status'] != 'NEW':
             continue
@@ -106,7 +112,7 @@ def update_review_list(files, updated):
             fdata[what] = update['number']
 
 
-for fname in sorted(glob.glob("%s/*.inc" % TOP)):
+for fname in sorted(glob.glob("%s/*.py" % TOP)):
     with open(fname) as f:
         fdata = {'filename': os.path.basename(fname)}
         content = f.readlines()
@@ -127,23 +133,32 @@ update_review_list(files, relevant)
 
 
 with open("data.csv", "a") as f:
-    f.write("%d,%d,%d,%d,%d\n" % (
+    f.write("%d,%d,%d,%d,%d,%d\n" % (
         int(time.time()),
-        len(counts['needs:method_verification']),
-        len(counts['needs:parameter_verification']),
-        len(counts['needs:example_verification']),
-        len(counts['needs:body_verification'])))
+        len(counts[PHASES[0]]),
+        len(counts[PHASES[1]]),
+        len(counts[PHASES[2]]),
+        len(counts[PHASES[3]]),
+        len(counts[PHASES[4]])))
 
 
 with open("data.json", "w") as f:
     f.write(json.dumps(files))
 
 with open("data.txt", "w") as f:
-    FORMAT = "%-40s %10s %10s %10s %10s\n"
-    f.write(FORMAT % ("File Name", "Method", "Param", "Example", "Body"))
+    FORMAT = "%-40s %12s %12s %12s %12s %12s\n"
+    f.write(FORMAT % (
+        "File Name",
+        "Description",
+        "Deprecation",
+        "Group/Type",
+        "Indentation",
+        "Consistency"))
     for fdata in files:
-        f.write((FORMAT % (fdata['filename'],
-                           fdata['needs:method_verification'],
-                           fdata['needs:parameter_verification'],
-                           fdata['needs:example_verification'],
-                           fdata['needs:body_verification'])).encode('utf8'))
+        f.write((FORMAT % (
+            fdata['filename'],
+            fdata[PHASES[0]],
+            fdata[PHASES[1]],
+            fdata[PHASES[2]],
+            fdata[PHASES[3]],
+            fdata[PHASES[4]])).encode('utf8'))
