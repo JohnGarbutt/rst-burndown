@@ -14,7 +14,7 @@ import re
 import requests
 from requests.auth import HTTPDigestAuth
 
-TOP = '../nova/nova/conf'
+TOP = 'nova/nova/conf'
 
 PROJECT_SITE = "https://review.openstack.org/changes/"
 DIFF_QUERY = "%s/revisions/current/patch"
@@ -111,14 +111,13 @@ def update_review_list(files, updated):
             what = "needs:%s" % update['tag']
             fdata[what] = update['number']
 
-
 for fname in sorted(glob.glob("%s/*.py" % TOP)):
     with open(fname) as f:
         fdata = {'filename': os.path.basename(fname)}
         content = f.readlines()
         done = True
         for key in PHASES:
-            if ".. %s\n" % key in content:
+            if "# %s\n" % key in content:
                 fdata[key] = "TODO"
                 done = False
                 counts[key].append(fname)
